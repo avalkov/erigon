@@ -358,10 +358,6 @@ func (s *EngineServer) getQuickPayloadStatusIfPossible(ctx context.Context, bloc
 	} else {
 		prefix = "ForkChoiceUpdated"
 	}
-	if s.config.TerminalTotalDifficulty == nil {
-		s.logger.Error(fmt.Sprintf("[%s] not a proof-of-stake chain", prefix))
-		return nil, errors.New("not a proof-of-stake chain")
-	}
 
 	if s.hd == nil {
 		return nil, errors.New("headerdownload is nil")
@@ -385,17 +381,8 @@ func (s *EngineServer) getQuickPayloadStatusIfPossible(ctx context.Context, bloc
 
 	// Retrieve parent and total difficulty.
 	var parent *types.Header
-	var td *big.Int
 	if newPayload {
 		parent = s.chainRW.GetHeaderByHash(ctx, parentHash)
-		td = s.chainRW.GetTd(ctx, parentHash, blockNumber-1)
-	} else {
-		td = s.chainRW.GetTd(ctx, blockHash, blockNumber)
-	}
-
-	if td != nil && td.Cmp(s.config.TerminalTotalDifficulty) < 0 {
-		s.logger.Warn(fmt.Sprintf("[%s] Beacon Chain request before TTD", prefix), "hash", blockHash)
-		return &engine_types.PayloadStatus{Status: engine_types.InvalidStatus, LatestValidHash: &libcommon.Hash{}, ValidationError: engine_types.NewStringifiedErrorFromString("Beacon Chain request before TTD")}, nil
 	}
 
 	var isCanonical bool
@@ -482,10 +469,6 @@ func (s *EngineServer) getPayload(ctx context.Context, payloadId uint64, version
 
 	if !s.proposing {
 		return nil, errors.New("execution layer not running as a proposer. enable proposer by taking out the --proposer.disable flag on startup")
-	}
-
-	if s.config.TerminalTotalDifficulty == nil {
-		return nil, errors.New("not a proof-of-stake chain")
 	}
 
 	s.logger.Debug("[GetPayload] acquiring lock")
