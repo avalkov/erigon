@@ -558,9 +558,11 @@ func (s *EngineServer) forkchoiceUpdated(ctx context.Context, forkchoiceState *e
 	}
 
 	if version < clparams.DenebVersion && payloadAttributes.ParentBeaconBlockRoot != nil {
+		s.logger.Error("[ForkChoiceUpdated] Unexpected Beacon Root", "version", version)
 		return nil, &engine_helpers.InvalidPayloadAttributesErr // Unexpected Beacon Root
 	}
 	if version >= clparams.DenebVersion && payloadAttributes.ParentBeaconBlockRoot == nil {
+		s.logger.Error("[ForkChoiceUpdated] Beacon Root missing", "version", version)
 		return nil, &engine_helpers.InvalidPayloadAttributesErr // Beacon Root missing
 	}
 
@@ -579,6 +581,7 @@ func (s *EngineServer) forkchoiceUpdated(ctx context.Context, forkchoiceState *e
 	headHeader := s.chainRW.GetHeaderByHash(ctx, forkchoiceState.HeadHash)
 
 	if headHeader.Time >= timestamp {
+		s.logger.Error("[ForkChoiceUpdated] Invalid timestamp", "headTime", headHeader.Time, "timestamp", timestamp)
 		return nil, &engine_helpers.InvalidPayloadAttributesErr
 	}
 
