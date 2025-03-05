@@ -294,11 +294,12 @@ func (s *Merge) verifyHeader(chain consensus.ChainHeaderReader, header, parent *
 	}
 
 	// Verify existence / non-existence of withdrawalsHash
-	shanghai := chain.Config().IsShanghai(header.Time)
-	if shanghai && header.WithdrawalsHash == nil {
+	isShanghaiOrAgra := chain.Config().IsShanghai(header.Time) || chain.Config().IsAgra(header.Time)
+
+	if isShanghaiOrAgra && header.WithdrawalsHash == nil {
 		return errors.New("missing withdrawalsHash")
 	}
-	if !shanghai && header.WithdrawalsHash != nil {
+	if !isShanghaiOrAgra && header.WithdrawalsHash != nil {
 		return consensus.ErrUnexpectedWithdrawals
 	}
 

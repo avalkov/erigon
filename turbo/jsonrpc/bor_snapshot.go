@@ -620,6 +620,7 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 
 		// check if signer is in validator set
 		if !snap.ValidatorSet.HasAddress(signer) {
+			fmt.Println("PSP - in bor_snapshot.go - UnauthorizedSignerError")
 			return nil, &valset.UnauthorizedSignerError{Number: number, Signer: signer.Bytes()}
 		}
 

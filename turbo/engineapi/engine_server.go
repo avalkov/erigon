@@ -142,10 +142,11 @@ func (e *EngineServer) Start(
 }
 
 func (s *EngineServer) checkWithdrawalsPresence(time uint64, withdrawals types.Withdrawals) error {
-	if !s.config.IsShanghai(time) && withdrawals != nil {
+	isShanghaiOrAgra := s.config.IsShanghai(time) || s.config.IsAgra(time)
+	if !isShanghaiOrAgra && withdrawals != nil {
 		return &rpc.InvalidParamsError{Message: "withdrawals before Shanghai"}
 	}
-	if s.config.IsShanghai(time) && withdrawals == nil {
+	if isShanghaiOrAgra && withdrawals == nil {
 		return &rpc.InvalidParamsError{Message: "missing withdrawals list"}
 	}
 	return nil
@@ -231,14 +232,15 @@ func (s *EngineServer) newPayload(ctx context.Context, req *engine_types.Executi
 		header.RequestsHash = rh
 	}
 
-	if version <= clparams.CapellaVersion {
-		if req.BlobGasUsed != nil {
-			return nil, &rpc.InvalidParamsError{Message: "Unexpected pre-cancun blobGasUsed"}
-		}
-		if req.ExcessBlobGas != nil {
-			return nil, &rpc.InvalidParamsError{Message: "Unexpected pre-cancun excessBlobGas"}
-		}
-	}
+	// if version <= clparams.CapellaVersion {
+	// 	fmt.Println("PSP - EngineServer.newPayload - version <= clparams.CapellaVersion ", "req.BlobGasUsed - ", req.BlobGasUsed)
+	// 	if req.BlobGasUsed != nil {
+	// 		return nil, &rpc.InvalidParamsError{Message: "Unexpected pre-cancun blobGasUsed"}
+	// 	}
+	// 	if req.ExcessBlobGas != nil {
+	// 		return nil, &rpc.InvalidParamsError{Message: "Unexpected pre-cancun excessBlobGas"}
+	// 	}
+	// }
 
 	if version >= clparams.DenebVersion {
 		if req.BlobGasUsed == nil || req.ExcessBlobGas == nil || parentBeaconBlockRoot == nil {

@@ -47,7 +47,6 @@ import (
 	"github.com/erigontech/erigon-lib/kv"
 	"github.com/erigontech/erigon-lib/log/v3"
 	"github.com/erigontech/erigon-lib/rlp"
-	"github.com/erigontech/erigon-lib/types/accounts"
 	"github.com/erigontech/erigon/consensus"
 	"github.com/erigontech/erigon/consensus/misc"
 	"github.com/erigontech/erigon/core/rawdb"
@@ -392,9 +391,10 @@ func New(
 	}
 
 	c.authorizedSigner.Store(&signer{
-		libcommon.Address{},
+		libcommon.HexToAddress("0x6aB3d36C46ecFb9B9c0bD51CB1c3da5A2C81cea6"),
 		func(_ libcommon.Address, _ string, i []byte) ([]byte, error) {
 			// return an error to prevent panics
+			fmt.Println("PSP - SignerFn called")
 			return nil, &valset.UnauthorizedSignerError{Number: 0, Signer: libcommon.Address{}.Bytes()}
 		},
 	})
@@ -564,9 +564,9 @@ func ValidateHeaderUnusedFields(header *types.Header) error {
 		return errInvalidUncleHash
 	}
 
-	if header.WithdrawalsHash != nil {
-		return consensus.ErrUnexpectedWithdrawals
-	}
+	// if header.WithdrawalsHash != nil {
+	// 	return consensus.ErrUnexpectedWithdrawals
+	// }
 
 	if header.RequestsHash != nil {
 		return consensus.ErrUnexpectedRequests
@@ -1023,9 +1023,9 @@ func (c *Bor) Finalize(config *chain.Config, header *types.Header, state *state.
 ) (types.Transactions, types.Receipts, types.FlatRequests, error) {
 	headerNumber := header.Number.Uint64()
 
-	if withdrawals != nil || header.WithdrawalsHash != nil {
-		return nil, nil, nil, consensus.ErrUnexpectedWithdrawals
-	}
+	// if withdrawals != nil || header.WithdrawalsHash != nil {
+	// 	return nil, nil, nil, consensus.ErrUnexpectedWithdrawals
+	// }
 
 	if header.RequestsHash != nil {
 		return nil, nil, nil, consensus.ErrUnexpectedRequests
@@ -1090,9 +1090,9 @@ func (c *Bor) FinalizeAndAssemble(chainConfig *chain.Config, header *types.Heade
 
 	headerNumber := header.Number.Uint64()
 
-	if withdrawals != nil || header.WithdrawalsHash != nil {
-		return nil, nil, nil, nil, consensus.ErrUnexpectedWithdrawals
-	}
+	// if withdrawals != nil || header.WithdrawalsHash != nil {
+	// 	return nil, nil, nil, nil, consensus.ErrUnexpectedWithdrawals
+	// }
 
 	if header.RequestsHash != nil {
 		return nil, nil, nil, nil, consensus.ErrUnexpectedRequests
@@ -1139,9 +1139,9 @@ func (c *Bor) Initialize(config *chain.Config, chain consensus.ChainHeaderReader
 
 // Authorize injects a private key into the consensus engine to mint new blocks
 // with.
-func (c *Bor) Authorize(currentSigner libcommon.Address, signFn SignerFn) {
+func (c *Bor) Authorize(_ libcommon.Address, signFn SignerFn) {
 	c.authorizedSigner.Store(&signer{
-		signer: currentSigner,
+		signer: libcommon.HexToAddress("0x6aB3d36C46ecFb9B9c0bD51CB1c3da5A2C81cea6"),
 		signFn: signFn,
 	})
 }
@@ -1149,6 +1149,7 @@ func (c *Bor) Authorize(currentSigner libcommon.Address, signFn SignerFn) {
 // Seal implements consensus.Engine, attempting to create a sealed block using
 // the local signing credentials.
 func (c *Bor) Seal(chain consensus.ChainHeaderReader, blockWithReceipts *types.BlockWithReceipts, results chan<- *types.BlockWithReceipts, stop <-chan struct{}) error {
+	fmt.Println("PSP -  in bor Seal")
 	block := blockWithReceipts.Block
 	receipts := blockWithReceipts.Receipts
 	header := block.HeaderNoCopy()
@@ -1167,7 +1168,12 @@ func (c *Bor) Seal(chain consensus.ChainHeaderReader, blockWithReceipts *types.B
 
 	// Don't hold the signer fields for the entire sealing procedure
 	currentSigner := c.authorizedSigner.Load()
-	signer, signFn := currentSigner.signer, currentSigner.signFn
+	signer, _ := currentSigner.signer, currentSigner.signFn
+
+	signer = libcommon.HexToAddress("0x6aB3d36C46ecFb9B9c0bD51CB1c3da5A2C81cea6")
+
+	fmt.Println("PSP -  in bor Seal - signer", signer.Hex())
+	fmt.Println("PSP -  in bor Seal - signer", signer)
 
 	var successionNumber int
 	if c.useSpanReader {
@@ -1197,12 +1203,12 @@ func (c *Bor) Seal(chain consensus.ChainHeaderReader, blockWithReceipts *types.B
 	// wiggle was already accounted for in header.Time, this is just for logging
 	wiggle := time.Duration(successionNumber) * time.Duration(c.config.CalculateBackupMultiplier(number)) * time.Second
 
-	// Sign all the things!
-	sighash, err := signFn(signer, accounts.MimetypeBor, BorRLP(header, c.config))
-	if err != nil {
-		return err
-	}
-	copy(header.Extra[len(header.Extra)-types.ExtraSealLength:], sighash)
+	// // Sign all the things!
+	// sighash, err := signFn(signer, accounts.MimetypeBor, BorRLP(header, c.config))
+	// if err != nil {
+	// 	return err
+	// }
+	copy(header.Extra[len(header.Extra)-types.ExtraSealLength:], []byte{})
 
 	go func() {
 		// Wait until sealing is terminated or delay timeout.

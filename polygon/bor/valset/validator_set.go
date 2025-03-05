@@ -707,8 +707,10 @@ func (vals *ValidatorSet) GetSignerSuccessionNumber(signer libcommon.Address, nu
 		return -1, &UnauthorizedProposerError{Number: number, Proposer: proposer.Address.Bytes()}
 	}
 
-	signerIndex, _ := vals.GetByAddress(signer)
+	signerIndex, err := vals.GetByAddress(signer)
+	fmt.Println("PSP - signerIndex", signerIndex, "err", err)
 	if signerIndex < 0 {
+		fmt.Println("PSP - signerIndex < 0")
 		return -1, &UnauthorizedSignerError{Number: number, Signer: signer.Bytes()}
 	}
 
