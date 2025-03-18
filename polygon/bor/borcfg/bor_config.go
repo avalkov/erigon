@@ -45,6 +45,8 @@ type BorConfig struct {
 	AhmedabadBlock             *big.Int          `json:"ahmedabadBlock"`             // Ahmedabad switch block (nil = no fork, 0 = already on Ahmedabad)
 	StateSyncConfirmationDelay map[string]uint64 `json:"stateSyncConfirmationDelay"` // StateSync Confirmation Delay, in seconds, to calculate `to`
 
+	PosSingleSlotFinality bool `json:"pos_single_slot_finality"`
+
 	sprints sprints
 }
 

@@ -340,6 +340,8 @@ type Bor struct {
 	frozenSnapshotsInit sync.Once
 	rootHashCache       *lru.ARCCache[string, string]
 	headerProgress      HeaderProgress
+
+	ssfEnabled bool
 }
 
 type signer struct {
@@ -358,6 +360,8 @@ func New(
 	logger log.Logger,
 	bridgeReader bridgeReader,
 	spanReader spanReader,
+	ssfEnabled bool,
+
 ) *Bor {
 	// get bor config
 	borConfig := chainConfig.Bor.(*borcfg.BorConfig)
@@ -388,6 +392,7 @@ func New(
 		bridgeReader:    bridgeReader,
 		useSpanReader:   spanReader != nil && !reflect.ValueOf(spanReader).IsNil(), // needed for interface nil caveat
 		spanReader:      spanReader,
+		ssfEnabled:      ssfEnabled,
 	}
 
 	c.authorizedSigner.Store(&signer{
@@ -916,7 +921,10 @@ func (c *Bor) Prepare(chain consensus.ChainHeaderReader, header *types.Header, s
 	}
 
 	// Set the correct difficulty
-	header.Difficulty = new(big.Int).SetUint64(validatorSet.SafeDifficulty(c.authorizedSigner.Load().signer))
+
+	if !c.ssfEnabled {
+		header.Difficulty = new(big.Int).SetUint64(validatorSet.SafeDifficulty(c.authorizedSigner.Load().signer))
+	}
 
 	// Ensure the extra data has all it's components
 	if len(header.Extra) < types.ExtraVanityLength {

@@ -140,6 +140,10 @@ func (d *BlockDownloader) downloadBlocksUsingWaypoints(
 	waypoints = d.limitWaypoints(waypoints)
 	waypoints = limitWaypointsEndBlock(waypoints, end)
 
+	if len(waypoints) == 0 {
+		return nil, nil
+	}
+
 	d.logger.Info(
 		syncLogPrefix("downloading blocks using waypoints"),
 		"waypointsLen", len(waypoints),
