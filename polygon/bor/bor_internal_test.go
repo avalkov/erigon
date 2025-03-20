@@ -32,20 +32,20 @@ import (
 func TestUseBridgeReader(t *testing.T) {
 	// test for Go's interface nil-ness caveat - https://codefibershq.com/blog/golang-why-nil-is-not-always-nil
 	var br *mockBridgeReader
-	bor := New(params.AmoyChainConfig, nil, nil, nil, nil, nil, nil, br, nil, false)
+	bor := New(params.AmoyChainConfig, nil, nil, nil, nil, nil, nil, br, nil, nil)
 	require.False(t, bor.useBridgeReader)
 	br = &mockBridgeReader{}
-	bor = New(params.AmoyChainConfig, nil, nil, nil, nil, nil, nil, br, nil, false)
+	bor = New(params.AmoyChainConfig, nil, nil, nil, nil, nil, nil, br, nil, nil)
 	require.True(t, bor.useBridgeReader)
 }
 
 func TestUseSpanReader(t *testing.T) {
 	// test for Go's interface nil-ness caveat - https://codefibershq.com/blog/golang-why-nil-is-not-always-nil
 	var sr *mockSpanReader
-	b := New(params.AmoyChainConfig, nil, nil, nil, nil, nil, nil, nil, sr, false)
+	b := New(params.AmoyChainConfig, nil, nil, nil, nil, nil, nil, nil, sr, nil)
 	require.False(t, b.useSpanReader)
 	sr = &mockSpanReader{}
-	b = New(params.AmoyChainConfig, nil, nil, nil, nil, nil, nil, nil, sr, false)
+	b = New(params.AmoyChainConfig, nil, nil, nil, nil, nil, nil, nil, sr, nil)
 	require.True(t, b.useSpanReader)
 }
 

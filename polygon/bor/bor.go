@@ -47,6 +47,7 @@ import (
 	"github.com/erigontech/erigon-lib/kv"
 	"github.com/erigontech/erigon-lib/log/v3"
 	"github.com/erigontech/erigon-lib/rlp"
+	"github.com/erigontech/erigon-lib/types/accounts"
 	"github.com/erigontech/erigon/consensus"
 	"github.com/erigontech/erigon/consensus/misc"
 	"github.com/erigontech/erigon/core/rawdb"
@@ -341,7 +342,7 @@ type Bor struct {
 	rootHashCache       *lru.ARCCache[string, string]
 	headerProgress      HeaderProgress
 
-	ssfEnabled bool
+	ssfEnabledAfterBlock *uint64
 }
 
 type signer struct {
@@ -360,7 +361,7 @@ func New(
 	logger log.Logger,
 	bridgeReader bridgeReader,
 	spanReader spanReader,
-	ssfEnabled bool,
+	ssfEnabledAfterBlock *uint64,
 
 ) *Bor {
 	// get bor config
@@ -376,27 +377,27 @@ func New(
 	signatures, _ := lru.NewARC[libcommon.Hash, libcommon.Address](inmemorySignatures)
 
 	c := &Bor{
-		chainConfig:     chainConfig,
-		config:          borConfig,
-		DB:              db,
-		blockReader:     blockReader,
-		Recents:         recents,
-		Signatures:      signatures,
-		spanner:         spanner,
-		stateReceiver:   genesisContracts,
-		HeimdallClient:  heimdallClient,
-		execCtx:         context.Background(),
-		logger:          logger,
-		closeCh:         make(chan struct{}),
-		useBridgeReader: bridgeReader != nil && !reflect.ValueOf(bridgeReader).IsNil(), // needed for interface nil caveat
-		bridgeReader:    bridgeReader,
-		useSpanReader:   spanReader != nil && !reflect.ValueOf(spanReader).IsNil(), // needed for interface nil caveat
-		spanReader:      spanReader,
-		ssfEnabled:      ssfEnabled,
+		chainConfig:          chainConfig,
+		config:               borConfig,
+		DB:                   db,
+		blockReader:          blockReader,
+		Recents:              recents,
+		Signatures:           signatures,
+		spanner:              spanner,
+		stateReceiver:        genesisContracts,
+		HeimdallClient:       heimdallClient,
+		execCtx:              context.Background(),
+		logger:               logger,
+		closeCh:              make(chan struct{}),
+		useBridgeReader:      bridgeReader != nil && !reflect.ValueOf(bridgeReader).IsNil(), // needed for interface nil caveat
+		bridgeReader:         bridgeReader,
+		useSpanReader:        spanReader != nil && !reflect.ValueOf(spanReader).IsNil(), // needed for interface nil caveat
+		spanReader:           spanReader,
+		ssfEnabledAfterBlock: ssfEnabledAfterBlock,
 	}
 
 	c.authorizedSigner.Store(&signer{
-		libcommon.HexToAddress("0x6aB3d36C46ecFb9B9c0bD51CB1c3da5A2C81cea6"),
+		libcommon.Address{},
 		func(_ libcommon.Address, _ string, i []byte) ([]byte, error) {
 			// return an error to prevent panics
 			fmt.Println("PSP - SignerFn called")
@@ -922,7 +923,7 @@ func (c *Bor) Prepare(chain consensus.ChainHeaderReader, header *types.Header, s
 
 	// Set the correct difficulty
 
-	if !c.ssfEnabled {
+	if c.ssfEnabledAfterBlock != nil && header.Number.Uint64() < *c.ssfEnabledAfterBlock {
 		header.Difficulty = new(big.Int).SetUint64(validatorSet.SafeDifficulty(c.authorizedSigner.Load().signer))
 	}
 
@@ -1002,11 +1003,14 @@ func (c *Bor) Prepare(chain consensus.ChainHeaderReader, header *types.Header, s
 	var succession int
 	var err error
 	signer := c.authorizedSigner.Load().signer
-	// if signer is not empty
-	if !bytes.Equal(signer.Bytes(), libcommon.Address{}.Bytes()) {
-		succession, err = validatorSet.GetSignerSuccessionNumber(signer, number)
-		if err != nil {
-			return err
+
+	if c.ssfEnabledAfterBlock != nil && header.Number.Uint64() < *c.ssfEnabledAfterBlock {
+		// if signer is not empty
+		if !bytes.Equal(signer.Bytes(), libcommon.Address{}.Bytes()) {
+			succession, err = validatorSet.GetSignerSuccessionNumber(signer, number)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -1147,9 +1151,9 @@ func (c *Bor) Initialize(config *chain.Config, chain consensus.ChainHeaderReader
 
 // Authorize injects a private key into the consensus engine to mint new blocks
 // with.
-func (c *Bor) Authorize(_ libcommon.Address, signFn SignerFn) {
+func (c *Bor) Authorize(currentSigner libcommon.Address, signFn SignerFn) {
 	c.authorizedSigner.Store(&signer{
-		signer: libcommon.HexToAddress("0x6aB3d36C46ecFb9B9c0bD51CB1c3da5A2C81cea6"),
+		signer: currentSigner,
 		signFn: signFn,
 	})
 }
@@ -1176,21 +1180,16 @@ func (c *Bor) Seal(chain consensus.ChainHeaderReader, blockWithReceipts *types.B
 
 	// Don't hold the signer fields for the entire sealing procedure
 	currentSigner := c.authorizedSigner.Load()
-	signer, _ := currentSigner.signer, currentSigner.signFn
-
-	signer = libcommon.HexToAddress("0x6aB3d36C46ecFb9B9c0bD51CB1c3da5A2C81cea6")
+	signer, signFn := currentSigner.signer, currentSigner.signFn
 
 	fmt.Println("PSP -  in bor Seal - signer", signer.Hex())
 	fmt.Println("PSP -  in bor Seal - signer", signer)
 
-	var successionNumber int
-	if c.useSpanReader {
-		validatorSet, err := c.spanReader.Producers(context.Background(), number)
-		if err != nil {
-			return err
-		}
+	var validatorSet *valset.ValidatorSet
+	var err error
 
-		successionNumber, err = validatorSet.GetSignerSuccessionNumber(signer, number)
+	if c.useSpanReader {
+		validatorSet, err = c.spanReader.Producers(context.Background(), number)
 		if err != nil {
 			return err
 		}
@@ -1200,8 +1199,13 @@ func (c *Bor) Seal(chain consensus.ChainHeaderReader, blockWithReceipts *types.B
 			return err
 		}
 
-		successionNumber, err = snap.ValidatorSet.GetSignerSuccessionNumber(signer, number)
-		if err != nil {
+		validatorSet = snap.ValidatorSet
+	}
+
+	var successionNumber int
+
+	if c.ssfEnabledAfterBlock != nil && header.Number.Uint64() < *c.ssfEnabledAfterBlock {
+		if successionNumber, err = validatorSet.GetSignerSuccessionNumber(signer, number); err != nil {
 			return err
 		}
 	}
@@ -1212,11 +1216,11 @@ func (c *Bor) Seal(chain consensus.ChainHeaderReader, blockWithReceipts *types.B
 	wiggle := time.Duration(successionNumber) * time.Duration(c.config.CalculateBackupMultiplier(number)) * time.Second
 
 	// // Sign all the things!
-	// sighash, err := signFn(signer, accounts.MimetypeBor, BorRLP(header, c.config))
-	// if err != nil {
-	// 	return err
-	// }
-	copy(header.Extra[len(header.Extra)-types.ExtraSealLength:], []byte{})
+	sighash, err := signFn(signer, accounts.MimetypeBor, BorRLP(header, c.config))
+	if err != nil {
+		return err
+	}
+	copy(header.Extra[len(header.Extra)-types.ExtraSealLength:], sighash)
 
 	go func() {
 		// Wait until sealing is terminated or delay timeout.

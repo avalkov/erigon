@@ -551,7 +551,9 @@ func New(ctx context.Context, stack *node.Node, config *ethconfig.Config, logger
 		if config.PolygonSync {
 			borConfig := consensusConfig.(*borcfg.BorConfig)
 
-			borConfig.PosSingleSlotFinality = config.PolygonPosSingleSlotFinality
+			if config.PolygonPosSingleSlotFinality {
+				borConfig.PosSingleSlotFinalityBlockAt = &config.PolygonPosSingleSlotFinalityBlockAt
+			}
 
 			polygonBridge = bridge.NewService(bridge.ServiceConfig{
 				Store:        bridgeStore,
